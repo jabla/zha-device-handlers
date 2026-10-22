@@ -18,8 +18,13 @@ from zhaquirks.builder import (
     UnitOfLength,
     UnitOfTime,
 )
-from zhaquirks.tuya import TuyaLocalCluster, TuyaPowerConfigurationCluster2AAA
+from zhaquirks.tuya import (
+    TUYA_CLUSTER_ID,
+    TuyaLocalCluster,
+    TuyaPowerConfigurationCluster2AAA,
+)
 from zhaquirks.tuya.builder import TuyaQuirkBuilder
+from zhaquirks.tuya.mcu import DPToAttributeMapping, TuyaMCUCluster
 
 
 class TuyaOccupancySensing(OccupancySensing, TuyaLocalCluster):
@@ -1652,25 +1657,41 @@ base_tuya_motion = (
     # 0: presence="none", state=false
     # 1: presence="presence" state=true triggers only with presence sensitivity on low
     # 2: presence="move" state=true
-    .tuya_enum(
+    # DP 104 is not occupancy: it holds timed states (nobody for 5 min, ...)
+    .tuya_dp_multi(
+        dp_id=1,
+        attribute_mapping=[
+            DPToAttributeMapping(
+                ep_attribute=TuyaOccupancySensing.ep_attribute,
+                attribute_name=OccupancySensing.AttributeDefs.occupancy.name,
+                converter=lambda x: x in (1, 2),
+            ),
+            DPToAttributeMapping(
+                ep_attribute=TuyaMCUCluster.ep_attribute,
+                attribute_name="presence",
+                converter=TuyaPresenceStateV03,
+            ),
+        ],
+    )
+    .tuya_attribute(
         dp_id=1,
         attribute_name="presence",
+        type=TuyaPresenceStateV03,
+    )
+    .enum(
+        attribute_name="presence",
         enum_class=TuyaPresenceStateV03,
+        cluster_id=TUYA_CLUSTER_ID,
         entity_platform=EntityPlatform.SENSOR,
         entity_type=EntityType.STANDARD,
         translation_key="presence_state",
         fallback_name="Presence state",
     )
-    .tuya_dp(
-        dp_id=104,
-        ep_attribute=TuyaOccupancySensing.ep_attribute,
-        attribute_name=OccupancySensing.AttributeDefs.occupancy.name,
-        converter=lambda x: x == 1,
-    )
     .adds(TuyaOccupancySensing)
+    # Attribute names of the ya4ft0w4 quirk that matched this device before
     .tuya_number(
         dp_id=2,
-        attribute_name="motion_sensitivity",
+        attribute_name="move_sensitivity",
         type=t.uint16_t,
         min_value=1,
         max_value=10,
@@ -1737,7 +1758,7 @@ base_tuya_motion = (
     .tuya_illuminance(dp_id=103)
     .tuya_number(
         dp_id=105,
-        attribute_name="fading_time",
+        attribute_name="presence_timeout",
         type=t.uint16_t,
         device_class=SensorDeviceClass.DURATION,
         unit=UnitOfTime.SECONDS,
