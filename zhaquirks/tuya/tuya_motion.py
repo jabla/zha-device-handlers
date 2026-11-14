@@ -1077,13 +1077,13 @@ base_tuya_motion = (
         translation_key="human_motion_state",
         fallback_name="Human motion state",
     )
-    # Unconfigured devices report 0xFFFFFF08, the value stays unknown then
+    # Only the low byte counts (upper bytes are 0xFF after a power cycle)
     .tuya_dp_attribute(
         dp_id=12,
         attribute_name="fading_time",
         type=t.uint16_t,
         access=foundation.ZCLAttributeAccess.Read | foundation.ZCLAttributeAccess.Write,
-        converter=lambda x: x if 3 <= x <= 600 else None,
+        converter=lambda x: x & 0xFF,
     )
     .number(
         attribute_name="fading_time",
@@ -1091,7 +1091,7 @@ base_tuya_motion = (
         device_class=NumberDeviceClass.DURATION,
         unit=UnitOfTime.SECONDS,
         min_value=3,
-        max_value=600,
+        max_value=255,
         step=1,
         translation_key="fading_time",
         fallback_name="Fading time",

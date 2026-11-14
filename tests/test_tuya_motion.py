@@ -206,8 +206,10 @@ async def test_tuya_motion_illuminance_threshold(
     "manufacturer",
     ["_TZE204_1youk3hj", "_TZE284_1youk3hj", "_TZE28C1000000_1youk3hj"],
 )
-async def test_tuya_motion_fading_time_unset(zigpy_device_from_v2_quirk, manufacturer):
-    """Test the NAS-PS10B2 fading time (DP 12) ignores the unset value."""
+async def test_tuya_motion_fading_time_low_byte(
+    zigpy_device_from_v2_quirk, manufacturer
+):
+    """Test the NAS-PS10B2 fading time (DP 12) keeps only the low byte."""
     quirked_device = zigpy_device_from_v2_quirk(manufacturer, "TS0601")
     tuya_cluster = quirked_device.endpoints[1].tuya_manufacturer
 
@@ -218,7 +220,7 @@ async def test_tuya_motion_fading_time_unset(zigpy_device_from_v2_quirk, manufac
     }
     number = metadata["fading_time"]
     assert number.entity_platform == EntityPlatform.NUMBER
-    assert (number.min, number.max) == (3, 600)
+    assert (number.min, number.max) == (3, 255)
     assert tuya_cluster.attributes_by_name["fading_time"].access == (
         foundation.ZCLAttributeAccess.Read | foundation.ZCLAttributeAccess.Write
     )
@@ -231,11 +233,15 @@ async def test_tuya_motion_fading_time_unset(zigpy_device_from_v2_quirk, manufac
     receive(b"\x00\x00\x00\x05")
     assert tuya_cluster.get("fading_time") == 5
 
-    # Sent by a device whose fading time was never set
+    # After a power cycle
     receive(b"\xff\xff\xff\x08")
-    assert tuya_cluster.get("fading_time") is None
+    assert tuya_cluster.get("fading_time") == 8
 
-    for value in (3, 600):
+    # 300 s acts as 44 s
+    receive(b"\x00\x00\x01\x2c")
+    assert tuya_cluster.get("fading_time") == 44
+
+    for value in (3, 255):
         with mock.patch.object(
             tuya_cluster.endpoint, "request", return_value=foundation.Status.SUCCESS
         ) as m1:
